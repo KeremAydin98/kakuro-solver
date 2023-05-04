@@ -8,6 +8,9 @@ import sys
 b = 0.025
 
 def fill_one_empty(ax, row, col):
+    """
+    Fills the empty cell with the color black
+    """
 
     row = row - 1
     col = col - 1
@@ -46,6 +49,9 @@ def fill_one_hint(ax, row, col, hint1, hint2):
     return ax
 
 def fill_hints(ax, row, col, hintS):
+    """
+    Fills Kakuro puzzle hints which are the sums of their rows and columns 
+    """
 
     hint = hintS[0]
     _type = hintS[1]
@@ -62,6 +68,9 @@ def fill_hints(ax, row, col, hintS):
         ax.text(col-1+0.6, row+-1+0.25, hint[1], color='w', fontsize=10, fontweight='bold')
         
 def write_value(ax, row, col, val):
+    """
+    Writes the value inside the cell after solution!!!
+    """
 
     row = row - 1
     col = col -1
@@ -72,6 +81,9 @@ def write_value(ax, row, col, val):
     return ax
 
 def write_mark(ax, row, col):
+    """
+    Puts a question mark inside the cell that is unknown
+    """
 
     row = row - 1
     col = col -1
@@ -89,18 +101,37 @@ def write_value_s(ax, row, col, val):
 
     return ax
 
-def create_matrix(n):
+def create_matrix(m):
+    """
+    Creates a matrix using matplotlib subplots with the given size m
+
+    Inputs:
+        m: number of rows
+    Outputs:
+        fig: figure of the subplots
+        ax: 
+            -------------
+            |  |  |  |  |
+            -------------
+            |  |  |  |  |
+            -------------
+            |  |  |  |  |
+            -------------
+            |  |  |  |  |
+            -------------
+    """
 
     # Create subplots
     fig, ax = plt.subplots()
-    # 
+    # Reverse the y-axis
     ax.invert_yaxis()
     
+    # Loops through m+1 values, drawing horizontal and vertical lines at each index using the plot() function from the ax object.
+    for i in range(m+1):
+        ax.plot([0,m], [i,i], 'k-')
+        ax.plot([i,i], [0,m], 'k-')
 
-    for i in range(n+1):
-        ax.plot([0,n], [i,i], 'k-')
-        ax.plot([i,i], [0,n], 'k-')
-
+    # Hides the x and y axis labels
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
         
@@ -132,7 +163,7 @@ def read_file(_file):
     Inputs:
         _file: file name
     Outputs:
-        board: The values within the kakuro puzzle 
+        board: The values within the kakuro puzzle in a nested list
         m: The number of rows
         n: The number of columns
     """
