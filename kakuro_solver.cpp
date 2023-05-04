@@ -100,10 +100,12 @@ void read_matrix(int** &matrix, std::ifstream &afile, int m, int n){
 
   matrix = new int*[m]; //rows
 
+  // Allocates memory for m arrays with size n
   for(int i = 0; i < m; i++){
     matrix[i] = new int[n]; //cols
   }
 
+  // Assigns values from the kakuro files
   int val;
   for(int i = 0; i < m; i++){
     for(int j = 0; j < n; j++){
@@ -185,47 +187,68 @@ COORD find_end(int** matrix, int m, int n, int i, int j, direction dir){ //0 dow
 
 vector<sum> get_sums(int** matrix, int m, int n){
 
+  // Initialize a vector for summations
   vector<sum> sums;
   
   for(int i = 0; i < m; i++){
     for(int j = 0; j < n; j++){
+
+      // value on the i. row and j. column
       int val = matrix[i][j];
+
+      // if the value is not -1 or -2, then it is a hint
       if(val != -1 && val != -2){
-	int hint = val;
-	hint = hint / 10;
+      
+        int hint = val;
+        hint = hint / 10;
 
-	if((hint%100) == 0){
-	  hint = (int)(hint/100);
-	  COORD START = COORD(i, j+1); 
-	  COORD END = find_end(matrix, m, n, i, j, d_right);
-	  sum _sum = sum(START, END, hint, d_right);
-	  sums.push_back(_sum);
-	}
+        if((hint%100) == 0){
 
-	else{
-	  int div = (int)(hint/100);
-	  int rem = (int)(hint%100);
-   
-	  if(div == 0 && rem != 0){
-	    COORD START = COORD(i+1,j);
-	    COORD END = find_end(matrix, m, n, i, j, d_down);
-	    sum _sum = sum(START, END, rem, d_down);
-	    sums.push_back(_sum);
-	  }
+          hint = (int)(hint/100);
+          // The coordinate of the first cell in the same row 
+          COORD START = COORD(i, j+1); 
+          // Returns the coordinate of the last cell(on the right direction) in the same row  as the starting cell that is not equal to -2.
+          COORD END = find_end(matrix, m, n, i, j, d_right);
 
-	  if(div != 0 && rem != 0){
-	    COORD START1 = COORD(i+1,j);
-	    COORD START2 = COORD(i,j+1);
-	    COORD END1 = find_end(matrix, m, n, i, j, d_down);
-	    COORD END2 = find_end(matrix, m, n, i, j, d_right);
-	    sum _sum1 = sum(START1, END1, rem, d_down);
-	    sum _sum2 = sum(START2, END2, div, d_right);
-	    sums.push_back(_sum1);
-	    sums.push_back(_sum2);
-	  }
-	}
+          // append the summations to the sums vector
+          sum _sum = sum(START, END, hint, d_right);
+          sums.push_back(_sum);
+        }
+
+        else{
+          int div = (int)(hint/100);
+          int rem = (int)(hint%100);
+        
+          if(div == 0 && rem != 0){
+            // The coordinate of the first cell in the same column
+            COORD START = COORD(i+1,j);
+            // Returns the coordinate of the last cell(on the down direction) in the same column as the starting cell that is not equal to -2.
+            COORD END = find_end(matrix, m, n, i, j, d_down);
+
+            sum _sum = sum(START, END, rem, d_down);
+
+            // append the summations to the sums vector
+            sums.push_back(_sum);
+          }
+
+          if(div != 0 && rem != 0){
+            // The coordinate of the first cell in the same column
+            COORD START1 = COORD(i+1,j);
+            // The coordinate of the first cell in the same row
+            COORD START2 = COORD(i,j+1);
+            // Returns the coordinate of the last cell(on the down direction) in the same column as the starting cell that is not equal to -2.
+            COORD END1 = find_end(matrix, m, n, i, j, d_down);
+            // Returns the coordinate of the last cell(on the right direction) in the same row as the starting cell that is not equal to -2.
+            COORD END2 = find_end(matrix, m, n, i, j, d_right);
+
+            sum _sum1 = sum(START1, END1, rem, d_down);
+            sum _sum2 = sum(START2, END2, div, d_right);
+            // append the summations to the sums vector
+            sums.push_back(_sum1);
+            sums.push_back(_sum2);
+          }
+        }
       }
-
       
     }
   }
@@ -249,27 +272,46 @@ bool solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
 int main(int argc, char** argv){
   
+  // Open the file kakuro 
   std::string filename(argv[1]);
   std::ifstream file;
-  file.open(filename.c_str());
+  file.open(filename.c_str()); // c_str is used to convert filename variable to C-style string
 
+  // The dimensions of the matrix
   int m, n;
   file >> m;
   file >> n;
 
+  // 2D integer array 
   int** mat;
+
+  // Creates m arrays with size n and assign the values of the matrix from kakuro file
   read_matrix(mat, file, m, n);
+  // Prints the puzzle matrix without solution
   print_one_matrix(mat, m, n);
   
+  // 2D integer array
   int** sol_mat;
+
+  // Creates m arrays with size n and assign the hints and empty cells 
   convert_sol(mat, sol_mat, m, n);
+  // Prints the solution matrix without solution
   print_one_matrix(sol_mat, m, n);
   
+  // Get the summation of each row and column
   vector<sum> sums = get_sums(mat, m, n);
+
+
+  // !!!!!!! SOLUTION !!!!!!!!!
   solution(mat, sol_mat, sums, m, n);
+
+
+  // Prints the solution matrix with solution
   print_one_matrix(sol_mat, m, n);
+  // Write solution matrix to a kakuro file
   sol_to_file(mat, sol_mat, m, n, "solution.kakuro");
   
+  // Delete allocated values to save memory
   for (int i = 0; i < n; i++){
     delete mat[i];
     delete sol_mat[i];
