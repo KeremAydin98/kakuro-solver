@@ -91,7 +91,9 @@ def write_value_s(ax, row, col, val):
 
 def create_matrix(n):
 
+    # Create subplots
     fig, ax = plt.subplots()
+    # 
     ax.invert_yaxis()
     
 
@@ -134,9 +136,6 @@ def read_file(_file):
         m: The number of rows
         n: The number of columns
     """
-
-
-
     reader = open(_file, "r")
     readlines = reader.readlines()
 
