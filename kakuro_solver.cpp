@@ -12,7 +12,7 @@ using namespace std;
 
 enum direction {d_down, d_right, none};
 
-#define COORD std::pair<int, int>
+#define COORD pair<int, int>
 
 //#define DEBUG
 
@@ -67,18 +67,18 @@ void convert_sol(int** mat, int** &sol_mat, int m, int n){
 }
 
 void print_one_matrix(int** matrix, int m, int n){
-  std::cout << "Matrix: " << std::endl;
+  cout << "Matrix: " << endl;
   for(int i = 0; i < m; i++){ //rows
     for(int j = 0; j < n; j++){ //cols
-      std::cout << matrix[i][j] << "\t";
+      cout << matrix[i][j] << "\t";
     }
-    std::cout << "\n";
+    cout << "\n";
   }
 }
 
 void sol_to_file(int** mat, int** sol_mat, int m, int n, string fname){
 
-  string fname = "visualize.kakuro";
+  //string fname = "visualize.kakuro";
   ofstream to_write(fname);
 
   to_write << m << " " << n << "\n";
@@ -96,7 +96,7 @@ void sol_to_file(int** mat, int** sol_mat, int m, int n, string fname){
   to_write.close();
 }
 
-void read_matrix(int** &matrix, std::ifstream &afile, int m, int n){
+void read_matrix(int** &matrix, ifstream &afile, int m, int n){
 
   matrix = new int*[m]; //rows
 
@@ -141,6 +141,7 @@ struct sum{
   {
     length = find_length(_start, _end, _dir);
     arr = new int[length];
+    /*
     #ifdef DEBUG
     cout << "############################" << endl;
     cout << "Creating sum with: " << endl;
@@ -150,6 +151,7 @@ struct sum{
     cout << "Length: " << length << endl;
     cout << "############################" << endl;
     #endif
+    */
   }
   
   //~sum(){
@@ -163,27 +165,30 @@ COORD find_end(int** matrix, int m, int n, int i, int j, direction dir){ //0 dow
   if(dir == d_right){
     for(int jj = j+1; jj < n; jj++){
       if(matrix[i][jj] != -2 || jj == n - 1){
-	if(matrix[i][jj] == -2 && jj == n -1)
-	  jj++;
-	COORD END = COORD(i, jj);
-	return END;
+        if(matrix[i][jj] == -2 && jj == n -1)
+            jj++;
+          COORD END = COORD(i, jj);
+          return END;
+
       }
     }
   }
-
-  if(dir == d_down){
+  else{// if(dir == d_down)
     for(int ii = i+1; ii < m; ii++){
       if(matrix[ii][j] != -2 || ii == m - 1){
-	if(matrix[ii][j] == -2 && ii == m - 1)
-	  ii++;
-	COORD END = COORD(ii, j);
-	return END;
+        if(matrix[ii][j] == -2 && ii == m - 1)
+                ii++;
+              COORD END = COORD(ii, j);
+              return END;
+        }
       }
-    }
   }
+
+  // no matching end found, return a default value
+  COORD not_found = COORD(-1, -1);
+  return not_found;
   
 }
-
 
 vector<sum> get_sums(int** matrix, int m, int n){
 
@@ -225,9 +230,8 @@ vector<sum> get_sums(int** matrix, int m, int n){
             // Returns the coordinate of the last cell(on the down direction) in the same column as the starting cell that is not equal to -2.
             COORD END = find_end(matrix, m, n, i, j, d_down);
 
-            sum _sum = sum(START, END, rem, d_down);
-
             // append the summations to the sums vector
+            sum _sum = sum(START, END, rem, d_down);
             sums.push_back(_sum);
           }
 
@@ -255,26 +259,81 @@ vector<sum> get_sums(int** matrix, int m, int n){
   return sums;
 }
 
+bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
+  /*
+  Confirms the solution to see if it is correct or not
+  */
 
-bool solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
+  for(int i=0; i<=m; i++){
+    
+    if(sums[i].dir == 0){ // down direction
+      int start = sums[i].start.first;
+      int end = sums[i].end.first;
+      int column = sums[i].start.second;
+
+      int sum = 0;
+      for(int j=start; j<end; j++){
+        sum += sol_mat[j][column];
+      }
+
+      if(sum != sums[i].hint){
+        return false;
+      }
+    }
+    else{ // right direction
+      int start = sums[i].start.second;
+      int end = sums[i].end.second;
+      int row = sums[i].start.first;
+
+      int sum = 0;
+
+      for(int j=start; j<end; j++){
+        sum += sol_mat[row][j];
+      }
+
+      if(sum != sums[i].hint){
+        return false;
+      }
+      }
+    }
+
+    return true;
+
+  }
+
+
+
+
+void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
   //TO DO: Write the solution
   //You can use any algorithm and data type
   //Write your solution to file in main function using sol_to_mat() after solving it
 
+  int rand = 0;
+
+  while(true){
+   
+    for(int i=0; i<m; i++){
+
+      if(check_solution(sol_mat, sums, m, n)){
+        return;
+      }
+      else{
+        break;
+      }
+
+    }
   
+  }
 
-
-
-
-  
 }
 
 int main(int argc, char** argv){
   
   // Open the file kakuro 
-  std::string filename(argv[1]);
-  std::ifstream file;
+  string filename(argv[1]);
+  ifstream file;
   file.open(filename.c_str()); // c_str is used to convert filename variable to C-style string
 
   // The dimensions of the matrix
