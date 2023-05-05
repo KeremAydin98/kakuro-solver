@@ -8,6 +8,9 @@
 #include <bits/stdc++.h>
 #include <array>
 
+#include <random>
+#include <list>
+
 using namespace std;
 
 enum direction {d_down, d_right, none};
@@ -270,12 +273,19 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
       int start = sums[i].start.first;
       int end = sums[i].end.first;
       int column = sums[i].start.second;
-
+      list<int> repetitive_or_not;
+      
       int sum = 0;
       for(int j=start; j<end; j++){
+        // Check if there are no repetitive values
+        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[j][column]) > 0) {
+            return false;
+        }
+        repetitive_or_not.push_back(sol_mat[j][column]);
         sum += sol_mat[j][column];
       }
 
+      // Check if the sums are correct
       if(sum != sums[i].hint){
         return false;
       }
@@ -284,22 +294,49 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
       int start = sums[i].start.second;
       int end = sums[i].end.second;
       int row = sums[i].start.first;
+      list<int> repetitive_or_not;
 
+      // Check if there are no repetitive values
       int sum = 0;
-
       for(int j=start; j<end; j++){
+        // Check if there are no repetitive values
+        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[row][j]) > 0) {
+            return false;
+        }
         sum += sol_mat[row][j];
+        repetitive_or_not.push_back(sol_mat[row][j]);
       }
 
+      // Check if the sums are correct
       if(sum != sums[i].hint){
         return false;
       }
+
       }
     }
 
     return true;
 
   }
+
+void initialize_rand_matrix(int** matrix, int m, int n){
+
+  
+  for(int i = 0; i < m; i++){ //rows
+    for(int j = 0; j < n; j++){ //cols
+      if(i==0 || j==0){
+        matrix[i][j] = -1;
+      }
+      else{
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<int> dis(1, 9);
+        matrix[i][j] = dis(gen);
+      }
+
+    }
+  }
+}
 
 
 
@@ -310,21 +347,17 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
   //You can use any algorithm and data type
   //Write your solution to file in main function using sol_to_mat() after solving it
 
-  int rand = 0;
-
   while(true){
    
-    for(int i=0; i<m; i++){
 
-      if(check_solution(sol_mat, sums, m, n)){
-        return;
-      }
-      else{
-        break;
-      }
+    initialize_rand_matrix(sol_mat, m, n);
 
+    
+
+    if(check_solution(sol_mat, sums, m, n)){
+      return;
     }
-  
+
   }
 
 }
