@@ -225,7 +225,6 @@ vector<sum> get_sums(int** matrix, int m, int n){
           sum _sum = sum(START, END, hint, d_right);
           sums.push_back(_sum);
         }
-
         else{
           int div = (int)(hint/100);
           int rem = (int)(hint%100);
@@ -271,8 +270,6 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
   */
 
   for(int i=0; i<=m; i++){
-
-    sums[i].print_sum();
     
     if(sums[i].dir == 0){ // down direction
       int start = sums[i].start.first;
@@ -342,8 +339,6 @@ void initialize_rand_matrix(int** matrix, int m, int n){
 
 }
 
-
-
 void random_without_constraint_solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
   // Get the starting timepoint
@@ -366,25 +361,27 @@ void random_without_constraint_solution(int** mat, int** sol_mat, vector<sum> su
 
 }
 
-void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<sum> sums, int row_or_column, int i){
+void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<sum> sums, int row_or_column, int m, int n, int i, int j){
 
   if(sums[i].dir == 0){
 
     int start = sums[i].start.first;
     int end = sums[i].end.first;
 
-    vector<int> column_values;
+    vector<int> repetitive_values;
 
     for (int k = start; k < end; k++) {
-    column_values.push_back(sol_mat[k][row_or_column]);
+      repetitive_values.push_back(sol_mat[k][row_or_column]);
     }
-
+    for (int k = 0; k < n; k++) {
+      repetitive_values.push_back(sol_mat[j][k]);
+    }
 
     int length = possible_values.size();
     vector<int> will_remove;
 
     for (int k = 0; k < length; k++) {
-      if ((possible_values[k] >= sums[i].hint) || (find(column_values.begin(), column_values.end(), possible_values[k]) != column_values.end())) {
+      if ((possible_values[k] >= sums[i].hint) || (find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) != repetitive_values.end())) {
           will_remove.push_back(possible_values[k]);
       }
     }
@@ -400,10 +397,14 @@ void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<s
     int end = sums[i].end.second;
     int row = sums[i].start.first;
 
-    vector<int> row_values;
+    vector<int> repetitive_values;
 
     for (int k = start; k < end; k++) {
-      row_values.push_back(sol_mat[row_or_column][k]);
+      repetitive_values.push_back(sol_mat[row_or_column][k]);
+    }
+
+    for (int k = 0; k < m; k++) {
+      repetitive_values.push_back(sol_mat[k][j]);
     }
 
     int length = possible_values.size();
@@ -411,7 +412,7 @@ void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<s
 
 
     for (int k = 0; k < length; k++) {
-        if ((possible_values[k] >= sums[i].hint) || (find(row_values.begin(), row_values.end(), possible_values[k]) != row_values.end())) {
+        if ((possible_values[k] >= sums[i].hint) || (find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) != repetitive_values.end())) {
             will_remove.push_back(possible_values[k]);
         }
     }
@@ -426,9 +427,75 @@ void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<s
 
 void random_with_constraint_solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
-  //TO DO: Write the solution
-  //You can use any algorithm and data type
-  //Write your solution to file in main function using sol_to_file() after solving it
+  // Get the starting timepoint
+  double start_time = omp_get_wtime();
+
+  while(true){
+    for(int i = 0; i <= m; i++){ 
+
+      vector<int> possible_values = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+        if(sums[i].dir == 0){ // down direction
+
+        int column = sums[i].start.second;
+
+        for(int j = 1; j < m; j++){ //rows
+
+          // Remove values which are present in the column or larger than sum
+          remove_unusable_values(possible_values, sol_mat, sums, column, m, n, i, j);
+
+          random_device rd;
+          mt19937 gen(rd());
+          uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
+
+          auto it = possible_values.begin();
+          advance(it, dis(gen));
+          int random_element = *it;
+
+          sol_mat[j][column] = random_element;
+
+          }
+        }
+        else{ // right direction
+
+          int row = sums[i].start.first;
+
+          for(int j = 1; j < m; j++){ //rows
+
+            // Remove used values which are in the row or larger than sum
+            remove_unusable_values(possible_values, sol_mat, sums, row, m, n, i, j);
+
+            random_device rd;
+            mt19937 gen(rd());
+            uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
+
+            auto it = possible_values.begin();
+            advance(it, dis(gen));
+            int random_element = *it;
+
+            sol_mat[row][j] = random_element;
+
+            }
+        }
+        if(possible_values.size() == 0){
+          break;
+        }
+      }
+
+      if(check_solution(sol_mat, sums, m, n)){
+        break;
+      }
+      
+    }
+
+  double end_time = omp_get_wtime();
+  double elapsed_time = end_time - start_time;
+
+  printf("\nElapsed time: %f\n", elapsed_time);
+
+}
+
+void final_solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
   // Get the starting timepoint
   double start_time = omp_get_wtime();
@@ -440,50 +507,99 @@ void random_with_constraint_solution(int** mat, int** sol_mat, vector<sum> sums,
 
         if(sums[i].dir == 0){ // down direction
 
-          int column = sums[i].start.second;
+        int start = sums[i].start.first;
+        int end = sums[i].end.first;
+        int column = sums[i].start.second;
+
+        for(int j = 1; j < end; j++){ //rows
 
           // Remove values which are present in the column or larger than sum
-          remove_unusable_values(possible_values, sol_mat, sums, column, i);
+          remove_unusable_values(possible_values, sol_mat, sums, column, m, n, i, j);
 
-        for(int j = 1; j < m; j++){ //rows
+          if(j == (end-1)){
+            int sum = 0;
+            for(int k=0; k<(end-1);k++){
+              if(sol_mat[k][column] != -1){ 
+                sum += sol_mat[k][column];
+              }
+            }
 
-          random_device rd;
-          mt19937 gen(rd());
-          uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
+            int last_value = sums[i].hint - sum;
 
-          auto it = possible_values.begin();
-          advance(it, dis(gen));
-          int random_element = *it;
+            if(find(possible_values.begin(), possible_values.end(), last_value) != possible_values.end()){
 
-          sol_mat[j][column] = random_element;
+              sol_mat[j][column] = last_value;
+
+            }
           }
-        }
-        else{ // right direction
+          else{
 
-          int row = sums[i].start.first;
-
-          // Remove used values which are in the row or larger than sum
-          remove_unusable_values(possible_values, sol_mat, sums, row, i);
-
-          for(int j = 1; j < m; j++){ //rows
-
+            // Extract random element from the possible values list
             random_device rd;
             mt19937 gen(rd());
             uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
-
             auto it = possible_values.begin();
             advance(it, dis(gen));
             int random_element = *it;
 
-            sol_mat[row][j] = random_element;
+            sol_mat[j][column] = random_element;
+
+          }
+
+          }
+        }
+        else{ // right direction
+
+          int start = sums[i].start.second;
+          int end = sums[i].end.second;
+          int row = sums[i].start.first;
+
+          for(int j = 1; j < end; j++){ //rows
+
+            // Remove used values which are in the row or larger than sum
+            remove_unusable_values(possible_values, sol_mat, sums, row, m, n, i, j);
+
+
+            if(j == (end-1)){
+            int sum = 0;
+              for(int k=0; k<(end-1);k++){
+                if(sol_mat[row][k] != -1){ 
+                  sum += sol_mat[row][k];
+                }
+              }
+
+            int last_value = sums[i].hint - sum;
+
+              if(find(possible_values.begin(), possible_values.end(), last_value) != possible_values.end()){
+
+                sol_mat[row][j] = last_value;
+
+              }
             }
+            else{
+
+              // Extract random element from the possible values lis
+              random_device rd;
+              mt19937 gen(rd());
+              uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
+              auto it = possible_values.begin();
+              advance(it, dis(gen));
+              int random_element = *it;
+
+              sol_mat[row][j] = random_element;
+            }
+
+            }
+        }
+        if(possible_values.size() == 0){
+          break;
         }
       }
 
       if(check_solution(sol_mat, sums, m, n)){
         break;
       }
-
+      
     }
 
   double end_time = omp_get_wtime();
@@ -492,6 +608,7 @@ void random_with_constraint_solution(int** mat, int** sol_mat, vector<sum> sums,
   printf("\nElapsed time: %f\n", elapsed_time);
 
 }
+
 
 int main(int argc, char** argv){
   
@@ -525,7 +642,7 @@ int main(int argc, char** argv){
   vector<sum> sums = get_sums(mat, m, n);
 
   // !!!!!!! SOLUTION !!!!!!!!!
-  random_with_constraint_solution(mat, sol_mat, sums, m, n);
+  final_solution(mat, sol_mat, sums, m, n);
 
   // Prints the solution matrix with solution
   print_one_matrix(sol_mat, m, n);
