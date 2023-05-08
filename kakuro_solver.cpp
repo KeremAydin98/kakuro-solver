@@ -268,7 +268,7 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
   Confirms the solution to see if it is correct or not
   */
 
-  for(int i=0; i<=m; i++){
+  for(int i=0; i<sums.size(); i++){
     
     if(sums[i].dir == 0){ // down direction
       int start = sums[i].start.first;
@@ -393,7 +393,7 @@ void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int 
   if(sums[i].dir == 0){
 
     int sum = 0;
-    for(int k=0; k<(end-1);k++){
+    for(int k=0; k<j;k++){
       if(sol_mat[k][row_or_column] != -1){ 
         sum += sol_mat[k][row_or_column];
       }
@@ -410,7 +410,7 @@ void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int 
   else{
 
     int sum = 0;
-    for(int k=0; k<(end-1);k++){
+    for(int k=0; k<j;k++){
       if(sol_mat[row_or_column][k] != -1){ 
         sum += sol_mat[row_or_column][k];
       }
@@ -427,15 +427,25 @@ void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int 
   }
 }
 
+
+int take_random_element(vector<int> possible_values){
+  // Extract random element from the possible values list
+  random_device rd;
+  mt19937 gen(rd());
+  uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
+  auto it = possible_values.begin();
+  advance(it, dis(gen));
+
+  return *it;
+}
+
 void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
   // Get the starting timepoint
   double start_time = omp_get_wtime();
 
   while(true){
-    for(int i = 0; i <= m; i++){ 
-
-      sums[i].print_sum();
+    for(int i = 0; i <sums.size(); i++){ 
 
       vector<int> possible_values = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -451,17 +461,11 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
           remove_unusable_values(possible_values, sol_mat, sums, column, m, n, i, j);
 
           if(j == (end-1)){
-            fill_sum(sol_mat, possible_values, sums, i, j, column)
+            fill_sum(sol_mat, possible_values, sums, i, j, column);
           }
           else{
 
-            // Extract random element from the possible values list
-            random_device rd;
-            mt19937 gen(rd());
-            uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
-            auto it = possible_values.begin();
-            advance(it, dis(gen));
-            int random_element = *it;
+            int random_element = take_random_element(possible_values);
 
             sol_mat[j][column] = random_element;
 
@@ -480,17 +484,11 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
             remove_unusable_values(possible_values, sol_mat, sums, row, m, n, i, j);
 
             if(j == (end-1)){
-              fill_sum(sol_mat, possible_values, sums, i, j, row)
+              fill_sum(sol_mat, possible_values, sums, i, j, row);
             }
             else{
 
-              // Extract random element from the possible values lis
-              random_device rd;
-              mt19937 gen(rd());
-              uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
-              auto it = possible_values.begin();
-              advance(it, dis(gen));
-              int random_element = *it;
+              int random_element = take_random_element(possible_values);
 
               sol_mat[row][j] = random_element;
             }
@@ -506,7 +504,6 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
       if(check_solution(sol_mat, sums, m, n)){
         break;
       }
-      
     }
 
   double end_time = omp_get_wtime();
