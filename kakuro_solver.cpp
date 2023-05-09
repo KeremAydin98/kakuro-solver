@@ -423,7 +423,6 @@ void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int 
       sol_mat[row_or_column][j] = last_value;
 
     }
-
   }
 }
 
@@ -460,6 +459,10 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
           // Remove values which are larger than sum or present in the column or row 
           remove_unusable_values(possible_values, sol_mat, sums, column, m, n, i, j);
 
+          if(possible_values.size() == 0){
+              break;
+          }
+
           if(j == (end-1)){
             fill_sum(sol_mat, possible_values, sums, i, j, column);
           }
@@ -483,6 +486,10 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
             // Remove used values which are in the row or column or larger than sum
             remove_unusable_values(possible_values, sol_mat, sums, row, m, n, i, j);
 
+            if(possible_values.size() == 0){
+              break;
+            }
+
             if(j == (end-1)){
               fill_sum(sol_mat, possible_values, sums, i, j, row);
             }
@@ -495,11 +502,8 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
             }
         }
-        if(possible_values.size() == 0){
-          break;
-        }
+      
       }
-
       // Checks the solution to see if it complies with the rules
       if(check_solution(sol_mat, sums, m, n)){
         break;
@@ -512,7 +516,6 @@ void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
   printf("\nElapsed time: %f\n", elapsed_time);
 
 }
-
 
 int main(int argc, char** argv){
   
@@ -551,7 +554,7 @@ int main(int argc, char** argv){
   // Prints the solution matrix with solution
   print_one_matrix(sol_mat, m, n);
   // Write solution matrix to a kakuro file
-  sol_to_file(mat, sol_mat, m, n, "solution4_2.kakuro");
+  sol_to_file(mat, sol_mat, m, n, "solution.kakuro");
   
   // Delete allocated values to save memory
   for (int i = 0; i < n; i++){
