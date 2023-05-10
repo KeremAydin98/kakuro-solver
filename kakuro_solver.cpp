@@ -11,6 +11,7 @@
 #include <random>
 #include <list>
 #include <omp.h>
+#include <set>
 
 
 using namespace std;
@@ -199,6 +200,8 @@ vector<sum> get_sums(int** matrix, int m, int n){
 
   // Initialize a vector for summations
   vector<sum> sums;
+
+
   
   for(int i = 0; i < m; i++){
     for(int j = 0; j < n; j++){
@@ -280,6 +283,9 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
       for(int j=start; j<end; j++){
         // Check if there are no repetitive values
         repetitive_or_not.push_back(sol_mat[j][column]);
+        if(sol_mat[j][column] == -2){
+          return false;
+        }
         if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[j][column]) > 1) {
             return false;
         }
@@ -302,6 +308,9 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
       for(int j=start; j<end; j++){
         // Check if there are no repetitive values
         repetitive_or_not.push_back(sol_mat[row][j]);
+        if(sol_mat[row][j] == -2){
+          return false;
+        }
         if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[row][j]) > 1) {
             return false;
         }
@@ -319,74 +328,6 @@ bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
     return true;
 
   }
-
-void remove_unusable_values(vector<int> possible_values, int** sol_mat, vector<sum> sums, int row_or_column, int m, int n, int i, int j){
-
-  if(sums[i].dir == 0){
-
-    int start = sums[i].start.first;
-    int end = sums[i].end.first;
-
-    vector<int> repetitive_values;
-
-    for (int k = start; k < end; k++) {
-      repetitive_values.push_back(sol_mat[k][row_or_column]);
-    }
-    for (int k = 1; k < n; k++) {
-      repetitive_values.push_back(sol_mat[j][k]);
-    }
-
-    int length = possible_values.size();
-    vector<int> will_remove;
-
-    for (int k = 0; k < length; k++) {
-      if ((possible_values[k] >= sums[i].hint) || (find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) != repetitive_values.end())) {
-          if(find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) == will_remove.end()){
-          will_remove.push_back(possible_values[k]);
-          }
-      }
-    }
-
-    vector<int>::iterator it;
-    for (it = will_remove.begin(); it != will_remove.end(); it++) {
-      possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
-    }
-  }
-  else{
-
-    int start = sums[i].start.second;
-    int end = sums[i].end.second;
-    int row = sums[i].start.first;
-
-    vector<int> repetitive_values;
-
-    for (int k = start; k < end; k++) {
-      repetitive_values.push_back(sol_mat[row_or_column][k]);
-    }
-
-    for (int k = 1; k < m; k++) {
-      repetitive_values.push_back(sol_mat[k][j]);
-    }
-
-    int length = possible_values.size();
-    vector<int> will_remove;
-
-
-    for (int k = 0; k < length; k++) {
-        if ((possible_values[k] >= sums[i].hint) || (find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) != repetitive_values.end())) {
-          if(find(repetitive_values.begin(), repetitive_values.end(), possible_values[k]) == will_remove.end()){
-            will_remove.push_back(possible_values[k]);
-          }
-        }
-    }
-
-    vector<int>::iterator it;
-    for (it = will_remove.begin(); it != will_remove.end(); it++) {
-        possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
-    }
-  }
-
-}
 
 void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int i, int j, int row_or_column){
 
@@ -426,89 +367,207 @@ void fill_sum(int** sol_mat, vector<int> possible_values, vector<sum> sums, int 
   }
 }
 
+vector<int> get_sum(int i, int j, vector<sum> sums){
 
-int take_random_element(vector<int> possible_values){
-  // Extract random element from the possible values list
-  random_device rd;
-  mt19937 gen(rd());
-  uniform_int_distribution<> dis(0, distance(possible_values.begin(), possible_values.end()) - 1);
-  auto it = possible_values.begin();
-  advance(it, dis(gen));
+  vector<int> a = {}; 
 
-  return *it;
+  for(int k=0; k<sums.size(); k++){
+
+    if(sums[k].dir == 0){
+      int column = sums[k].start.second;
+
+      if(column == j){
+        a.push_back(k);
+      } 
+    }
+    else{
+      int row = sums[k].start.first;
+
+      if(row == i){
+        a.push_back(k);
+      }
+    }
+  }
+  return a;
 }
 
-void solution(int** mat, int** sol_mat, vector<sum> sums, int m, int n){
+vector<int> remove_unusable_values(int** sol_mat, int i, int j, vector<sum> sums, vector<int> which_sum){
+
+  vector<int> possible_values = {1,2,3,4,5,6,7,8,9};
+
+  int min = 10;
+  for(int k=0; k<which_sum.size(); k++){
+    
+    if(sums[which_sum[k]].hint < min){
+      min = sums[which_sum[k]].hint;
+    }
+  }
+  vector<int> will_remove = {};
+
+  if(min != 10){
+
+  for(int kk=0;kk<possible_values.size(); kk++){
+      if(possible_values[kk] >= min){
+        will_remove.push_back(possible_values[kk]);
+      }
+  }
+
+  }
+
+  for(int k=0; k<which_sum.size(); k++){
+
+    if(sums[which_sum[k]].dir == 0){
+
+      int start = sums[which_sum[k]].start.first;
+      int end = sums[which_sum[k]].end.first;
+      int column = sums[which_sum[k]].start.second;
+
+      for(int ll=start; ll<end; ll++){
+        if((ll != i) && find(possible_values.begin(), possible_values.end(), sol_mat[ll][column]) != possible_values.end()){
+          will_remove.push_back(sol_mat[ll][column]);
+        }
+      }
+
+    }
+    else{
+
+      int start = sums[which_sum[k]].start.second;
+      int end = sums[which_sum[k]].end.second;
+      int row = sums[which_sum[k]].start.first;
+
+      for(int mm=start; mm<end; mm++){
+        if((mm != j) && find(possible_values.begin(), possible_values.end(), sol_mat[row][mm]) != possible_values.end()){
+          will_remove.push_back(sol_mat[row][mm]);
+        }
+      }
+      
+      }
+  }
+
+  vector<int>::iterator it;
+    for (it = will_remove.begin(); it != will_remove.end(); it++) {
+        possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
+    }
+
+  return possible_values;
+
+}
+
+void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m, int n){
 
   // Get the starting timepoint
   double start_time = omp_get_wtime();
 
-  while(true){
-    for(int i = 0; i <sums.size(); i++){ 
+  int** iteration = new int*[m];
+  for(int i = 0; i < m; i++){
+    iteration[i] = new int[n];
+  }
+  for(int i=0; i<m; i++){
+    for(int j=0; j<n; j++){
+      if(sol_mat[i][j] == -2){
+        iteration[i][j] = 0;
+      }
+      else{
+        iteration[i][j] = -1;
+      }
+    }
+  }
 
-      vector<int> possible_values = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+  int which_sum_1, which_sum_2, end_1, end_2, column, row; 
+  
+  bool condition = true;
+  while(condition){
 
-        if(sums[i].dir == 0){ // down direction
+  for(int i=0; i<m; i++){
+    for(int j=0; j<n; j++){
 
-        int start = sums[i].start.first;
-        int end = sums[i].end.first;
-        int column = sums[i].start.second;
+      if(iteration[i][j] == -1){
+        continue;
+      }      
 
-        for(int j = 1; j < end; j++){ //rows
+      vector<int> which_sum = get_sum(i, j, sums);
 
-          // Remove values which are larger than sum or present in the column or row 
-          remove_unusable_values(possible_values, sol_mat, sums, column, m, n, i, j);
+      vector<int> possible_values = remove_unusable_values(sol_mat, i, j, sums, which_sum);
 
-          if(possible_values.size() == 0){
-              break;
-          }
+      if(possible_values.size() == 0){
+        iteration[i][j] += 1;
+        break;
+      }
 
-          if(j == (end-1)){
-            fill_sum(sol_mat, possible_values, sums, i, j, column);
-          }
-          else{
+      for(int k=0; k<which_sum.size();k++){
 
-            int random_element = take_random_element(possible_values);
+        if(sums[which_sum[k]].dir == 0){ // down direction
 
-            sol_mat[j][column] = random_element;
+          which_sum_1 = which_sum[k];
+          end_1 = sums[which_sum_1].end.first;
+          column = sums[which_sum_1].start.second;
 
-            }
-          }
         }
         else{ // right direction
 
-          int start = sums[i].start.second;
-          int end = sums[i].end.second;
-          int row = sums[i].start.first;
+          which_sum_2 = which_sum[k];
+          end_2 = sums[which_sum_2].end.second;
+          row = sums[which_sum_2].start.first;
 
-          for(int j = 1; j < end; j++){ //rows
-
-            // Remove used values which are in the row or column or larger than sum
-            remove_unusable_values(possible_values, sol_mat, sums, row, m, n, i, j);
-
-            if(possible_values.size() == 0){
-              break;
-            }
-
-            if(j == (end-1)){
-              fill_sum(sol_mat, possible_values, sums, i, j, row);
-            }
-            else{
-
-              int random_element = take_random_element(possible_values);
-
-              sol_mat[row][j] = random_element;
-            }
-
-            }
         }
+      }
+
+      if((i == (end_1-1)) && (j == column)){
+        int first_value = sol_mat[i][j];
+        fill_sum(sol_mat, possible_values, sums, which_sum_1, i, j);
+        if(sol_mat[i][j] != first_value){
+          continue;
+        }
+      }
+      else if((j == (end_2-1)) && (i == row)){
+        int first_value = sol_mat[i][j];
+        fill_sum(sol_mat, possible_values, sums, which_sum_2, j, i);
+        if(sol_mat[i][j] != first_value){
+          continue;
+        }
+      }
+
+      int which_value = iteration[i][j] % possible_values.size();
+
+      sol_mat[i][j] = possible_values[which_value];
+
+      iteration[i][j] += 1;
+
       
-      }
-      // Checks the solution to see if it complies with the rules
-      if(check_solution(sol_mat, sums, m, n)){
-        break;
-      }
     }
+  }
+  
+
+  if(check_solution(sol_mat, sums, m, n)){
+      condition = false;
+  }
+    
+  ifstream file;
+  file.open(filename.c_str()); // c_str is used to convert filename variable to C-style string
+
+  // The dimensions of the matrix
+  int m, n;
+  file >> m;
+  file >> n;
+
+  // 2D integer array 
+  int** mat;
+
+  // Creates m arrays with size n and assign the values of the matrix from kakuro file
+  read_matrix(mat, file, m, n);
+  
+  // 2D integer array
+  int** sol_mat;
+
+  // Creates m arrays with size n and assign the hints and empty cells 
+  convert_sol(mat, sol_mat, m, n);
+
+  }
+
+  for(int i = 0; i < m; i++){
+    delete [] iteration[i];
+  }
+  delete [] iteration;
 
   double end_time = omp_get_wtime();
   double elapsed_time = end_time - start_time;
@@ -549,12 +608,12 @@ int main(int argc, char** argv){
   vector<sum> sums = get_sums(mat, m, n);
 
   // !!!!!!! SOLUTION !!!!!!!!!
-  solution(mat, sol_mat, sums, m, n);
+  solution(filename, mat, sol_mat, sums, m, n);
 
   // Prints the solution matrix with solution
   print_one_matrix(sol_mat, m, n);
   // Write solution matrix to a kakuro file
-  sol_to_file(mat, sol_mat, m, n, "solution.kakuro");
+  sol_to_file(mat, sol_mat, m, n, "solution5_1.kakuro");
   
   // Delete allocated values to save memory
   for (int i = 0; i < n; i++){
