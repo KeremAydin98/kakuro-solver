@@ -396,6 +396,7 @@ vector<int> remove_unusable_values(int** sol_mat, int i, int j, vector<sum> sums
   vector<int> possible_values = {1,2,3,4,5,6,7,8,9};
 
   int min = 10;
+
   for(int k=0; k<which_sum.size(); k++){
     
     if(sums[which_sum[k]].hint < min){
@@ -405,7 +406,6 @@ vector<int> remove_unusable_values(int** sol_mat, int i, int j, vector<sum> sums
   vector<int> will_remove = {};
 
   if(min != 10){
-
   for(int kk=0;kk<possible_values.size(); kk++){
       if(possible_values[kk] >= min){
         will_remove.push_back(possible_values[kk]);
@@ -445,9 +445,9 @@ vector<int> remove_unusable_values(int** sol_mat, int i, int j, vector<sum> sums
   }
 
   vector<int>::iterator it;
-    for (it = will_remove.begin(); it != will_remove.end(); it++) {
-        possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
-    }
+  for (it = will_remove.begin(); it != will_remove.end(); it++) {
+      possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
+  }
 
   return possible_values;
 
@@ -457,6 +457,7 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
 
   // Get the starting timepoint
   double start_time = omp_get_wtime();
+
 
   int** iteration = new int*[m];
   for(int i = 0; i < m; i++){
@@ -474,11 +475,12 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
   }
 
   int which_sum_1, which_sum_2, end_1, end_2, column, row; 
-  
   bool condition = true;
+  
   while(condition){
 
   for(int i=0; i<m; i++){
+
     for(int j=0; j<n; j++){
 
       if(iteration[i][j] == -1){
@@ -491,7 +493,8 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
 
       if(possible_values.size() == 0){
         iteration[i][j] += 1;
-        break;
+        continue;
+        
       }
 
       for(int k=0; k<which_sum.size();k++){
@@ -522,6 +525,7 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
       else if((j == (end_2-1)) && (i == row)){
         int first_value = sol_mat[i][j];
         fill_sum(sol_mat, possible_values, sums, which_sum_2, j, i);
+        
         if(sol_mat[i][j] != first_value){
           continue;
         }
@@ -529,10 +533,10 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
 
       int which_value = iteration[i][j] % possible_values.size();
 
+
       sol_mat[i][j] = possible_values[which_value];
 
       iteration[i][j] += 1;
-
       
     }
   }
@@ -559,7 +563,6 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
   // 2D integer array
   int** sol_mat;
 
-  // Creates m arrays with size n and assign the hints and empty cells 
   convert_sol(mat, sol_mat, m, n);
 
   }
@@ -572,9 +575,165 @@ void solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m
   double end_time = omp_get_wtime();
   double elapsed_time = end_time - start_time;
 
-  printf("\nElapsed time: %f\n", elapsed_time);
+  printf("\nRegular elapsed time: %f\n", elapsed_time);
 
 }
+
+void parallel_solution(string filename, int** mat, int** sol_mat, vector<sum> sums, int m, int n){
+
+  // Get the starting timepoint
+  double start_time = omp_get_wtime();
+
+  const int CACHE_LINE_SIZE = 64; 
+
+  int num_elements_per_row = n + CACHE_LINE_SIZE/sizeof(int) - (n % (CACHE_LINE_SIZE/sizeof(int)));
+  int** iteration = new int*[m];
+  for(int i = 0; i < m; i++){
+    iteration[i] = new int[num_elements_per_row];
+    // Set padding elements to -1
+    for(int j = n; j < num_elements_per_row; j++){
+      iteration[i][j] = -1;
+    }
+  }
+
+  for(int i=0; i<m; i++){
+    for(int j=0; j<n; j++){
+      if(sol_mat[i][j] == -2){
+        iteration[i][j] = 0;
+      }
+      else{
+        iteration[i][j] = -1;
+      }
+    }
+  }
+
+  int which_sum_1, which_sum_2, end_1, end_2, column, row; 
+  bool condition = true;
+  
+  while(condition){
+
+  #pragma omp parallel
+  {
+    int tid = omp_get_thread_num();
+    int nthreads = omp_get_num_threads();
+    int start_row = tid * m / nthreads;
+    int end_row = (tid + 1) * m / nthreads;
+
+  for(int i=start_row; i<end_row; i+=nthreads){
+
+    for(int j=0; j<n; j++){
+
+      if(iteration[i][j] == -1){
+        continue;
+      }      
+
+      vector<int> which_sum = get_sum(i, j, sums);
+
+      vector<int> possible_values = remove_unusable_values(sol_mat, i, j, sums, which_sum);
+
+      if(possible_values.size() == 0){
+        #pragma omp critical
+        {
+        iteration[i][j] += 1;
+        }
+        continue;
+        
+      }
+
+      for(int k=0; k<which_sum.size();k++){
+
+        if(sums[which_sum[k]].dir == 0){ // down direction
+
+          which_sum_1 = which_sum[k];
+          end_1 = sums[which_sum_1].end.first;
+          column = sums[which_sum_1].start.second;
+
+        }
+        else{ // right direction
+
+          which_sum_2 = which_sum[k];
+          end_2 = sums[which_sum_2].end.second;
+          row = sums[which_sum_2].start.first;
+
+        }
+      }
+
+      if((i == (end_1-1)) && (j == column)){
+        int first_value = sol_mat[i][j];
+        fill_sum(sol_mat, possible_values, sums, which_sum_1, i, j);
+        if(sol_mat[i][j] != first_value){
+          continue;
+        }
+      }
+      else if((j == (end_2-1)) && (i == row)){
+        int first_value = sol_mat[i][j];
+        fill_sum(sol_mat, possible_values, sums, which_sum_2, j, i);
+        
+        if(sol_mat[i][j] != first_value){
+          continue;
+        }
+      }
+
+      int which_value = iteration[i][j] % possible_values.size();
+
+      sol_mat[i][j] = possible_values[which_value];
+
+      iteration[i][j] += 1;
+    }
+  }
+
+  if(check_solution(sol_mat, sums, m, n)){
+      condition = false;
+  }
+  }
+    
+  ifstream file;
+  file.open(filename.c_str()); // c_str is used to convert filename variable to C-style string
+
+  // The dimensions of the matrix
+  int m, n;
+  file >> m;
+  file >> n;
+
+  // 2D integer array 
+  int** mat;
+
+  // Creates m arrays with size n and assign the values of the matrix from kakuro file
+  read_matrix(mat, file, m, n);
+  
+  // 2D integer array
+  int** sol_mat = new int*[m];
+  for(int i = 0; i < m; i++){
+    sol_mat[i] = new int[num_elements_per_row];
+    // Set padding elements to -1
+    for(int j = n; j < num_elements_per_row; j++){
+      sol_mat[i][j] = -1;
+    }
+  }
+
+  for(int i = 0; i < m; i++){
+    for(int j = 0; j < m; j++){
+      if(mat[i][j] == -2)
+	sol_mat[i][j] = -2; //Empty value cell
+      else
+	sol_mat[i][j] = -1; //Hint or empty cell
+    }
+  }
+  
+  }
+
+  for(int i = 0; i < m; i++){
+    delete [] iteration[i];
+  }
+  delete [] iteration;
+
+  double end_time = omp_get_wtime();
+  double elapsed_time = end_time - start_time;
+
+  printf("\nOptimized Elapsed time: %f\n", elapsed_time);
+
+}
+
 
 int main(int argc, char** argv){
   
@@ -610,19 +769,32 @@ int main(int argc, char** argv){
   // !!!!!!! SOLUTION !!!!!!!!!
   solution(filename, mat, sol_mat, sums, m, n);
 
-  // Prints the solution matrix with solution
+  // Prints the solution matrix without solution
   print_one_matrix(sol_mat, m, n);
+  
+  // 2D integer array
+  int** sol_mat_2;
+
+  convert_sol(mat, sol_mat_2, m, n);
+
+  // !!!!!!! SOLUTION !!!!!!!!!
+  parallel_solution(filename, mat, sol_mat_2, sums, m, n);
+
+  // Prints the solution matrix with solution
+  print_one_matrix(sol_mat_2, m, n);
   // Write solution matrix to a kakuro file
-  sol_to_file(mat, sol_mat, m, n, "solution5_1.kakuro");
+  sol_to_file(mat, sol_mat_2, m, n, "solution.kakuro");
   
   // Delete allocated values to save memory
   for (int i = 0; i < n; i++){
     delete mat[i];
     delete sol_mat[i];
+    delete sol_mat_2[i];
   }
 
   delete mat;
   delete sol_mat;
+  delete sol_mat_2;
   
   return 0;
 }
