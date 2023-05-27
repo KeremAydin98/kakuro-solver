@@ -354,7 +354,7 @@ void init_iteration(int* iteration, int* sol_mat, int m, int n)
 vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
                                    int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
                                    int* d_sum_ends_y, int* d_sum_hints,
-                                   int* d_t_mats, int m, int n, vector<sum> sums){
+                                   int m, int n, vector<sum> sums){
 
   vector<int> possible_values = {1,2,3,4,5,6,7,8,9};
 
@@ -383,76 +383,92 @@ vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
   return possible_values;
 }
 
-bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
+void fill_sum(int* d_sol_mat, vector<int> possible_values, int* d_sum_hints, int* d_sum_dirs, int i, int j, int k, int m, int n){
+
+  int summation = 0;
+  
+  if(d_sum_dirs[k] == 0){
+
+    for(int kk=0; kk<j;kk++){
+      if(d_sol_mat[kk * n + j] != -1){ 
+        summation += d_sol_mat[kk * n + j];
+      }
+    }
+  }
+  else{
+
+    for(int kk=0; kk<j;kk++){
+      if(d_sol_mat[i * n + kk] != -1){ 
+        summation += d_sol_mat[i * n + kk];
+      }
+    }
+  }
+
+  int last_value = d_sum_hints[k] - summation;
+
+  if(find(possible_values.begin(), possible_values.end(), last_value) != possible_values.end()){
+
+    d_sol_mat[i * n + j] = last_value;
+
+  }
+  
+}
+
+bool hasRepetitiveValues(const std::vector<int>& vec) {
+    std::set<int> uniqueElements;
+    for (int element : vec) {
+        if (uniqueElements.count(element) > 0) {
+            // Element already exists in the set
+            return true;
+        }
+        uniqueElements.insert(element);
+    }
+    return false;
+}
+
+bool check_solution(int* d_sol_mat, int no_sums, int m, int n,
+                    int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                    int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs){
   /*
   Confirms the solution to see if it is correct or not
   */
-
-  for(int i=0; i<sums.size(); i++){
-    
-    if(sums[i].dir == 0){ // down direction
-      int start = sums[i].start.first;
-      int end = sums[i].end.first;
-      int column = sums[i].start.second;
-      vector<int> repetitive_or_not;
-      
-      int sum = 0;
-      for(int j=start; j<end; j++){
-        // Check if there are no repetitive values
-        repetitive_or_not.push_back(sol_mat[j][column]);
-        if(sol_mat[j][column] == -2){
-          return false;
-        }
-        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[j][column]) > 1) {
-            return false;
-        }
-        sum += sol_mat[j][column];
-      }
-
-      // Check if the sums are correct
-      if(sum != sums[i].hint){
-        return false;
+  for(int k=0; k<no_sums; k++){
+    int summation = 0;
+    vector<int> repetitive_or_not;
+    if(d_sum_dirs[k] == 0)
+    {
+      for(int j=d_sum_starts_x[k]; j<d_sum_ends_x[k]; j++)
+      {
+        summation += d_sol_mat[d_sum_starts_y[k] * n + j];
+        repetitive_or_not.push_back(d_sol_mat[d_sum_starts_y[k] * n + j]);
       }
     }
-    else{ // right direction
-      int start = sums[i].start.second;
-      int end = sums[i].end.second;
-      int row = sums[i].start.first;
-      vector<int> repetitive_or_not;
-
-      // Check if there are no repetitive values
-      int sum = 0;
-      for(int j=start; j<end; j++){
-        // Check if there are no repetitive values
-        repetitive_or_not.push_back(sol_mat[row][j]);
-        if(sol_mat[row][j] == -2){
-          return false;
-        }
-        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[row][j]) > 1) {
-            return false;
-        }
-        sum += sol_mat[row][j];   
-      }
-
-      // Check if the sums are correct
-      if(sum != sums[i].hint){
-        return false;
-      }
-
+    else{
+      for(int j=d_sum_starts_y[k]; j<d_sum_ends_y[k]; j++)
+      {
+        summation += d_sol_mat[j * n + d_sum_starts_x[k]];
+        repetitive_or_not.push_back(d_sol_mat[d_sum_starts_y[k] * n + j]);
       }
     }
 
-    return true;
+    if(d_sum_hints[k] != summation){
+        return false;
+    }
 
+    if (hasRepetitiveValues(repetitive_or_not)){
+      return false;
+    }
   }
 
+  return true;
+
+}
 
 __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
                               int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs, 
-                              int* d_sol_mat, int* d_t_mats, int m, int n, int no_sums, volatile bool* solved,
+                              int* d_sol_mat, int m, int n, int no_sums, volatile bool* solved,
                               int* iteration, vector<sum> sums){
 
-  //TO DO
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
   if(tid < no_sums)
@@ -462,11 +478,11 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
 
       for(int j=d_sum_starts_y[tid]; j<d_sum_ends_y[tid]; j++)
       {
-
+ 
         vector<int> possible_values = remove_unusable_values(d_sol_mat, i, j, tid,
                                                              d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
                                                              d_sum_ends_y, d_sum_hints,
-                                                             d_t_mats, m, n, sums);
+                                                             m, n, sums);
 
         if(possible_values.size() == 0){
           iteration[i * n + j] += 1;
@@ -475,14 +491,14 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
 
         if((i == d_sum_ends_x[tid]) && (d_sum_dirs[tid] == 0)){
           int first_value = d_sol_mat[i * n + j];
-          fill_sum(d_sol_mat, possible_values, sums, tid, i, j);
+          fill_sum(d_sol_mat, possible_values, d_sum_hints, i, j, tid, m, n);
           if(d_sol_mat[i * n + j] != first_value){
             continue;
           }
         }
         else if((i == d_sum_ends_y[tid]) && (d_sum_dirs[tid] == 1)){
           int first_value = d_sol_mat[i * n + j];
-          fill_sum(d_sol_mat, possible_values, sums, tid, j, i);
+          fill_sum(d_sol_mat, possible_values, d_sum_hints, i, j, tid, m, n);
           
           if(d_sol_mat[i * n + j] != first_value){
             continue;
@@ -495,8 +511,12 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
         d_sol_mat[i * n + j] = possible_values[which_value];
 
         iteration[i * n + j] += 1;
-     
 
+        if(check_solution(d_sol_mat, no_sums, m, n,
+                          d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
+                          d_sum_ends_y, d_sum_hints, d_sum_lengths, d_sum_dirs)){
+            *solved = true;
+        }
       }
     }
   } 
