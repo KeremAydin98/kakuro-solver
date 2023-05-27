@@ -127,22 +127,27 @@ COORD find_end(int** matrix, int m, int n, int i, int j, direction dir){ //0 dow
     for(int jj = j+1; jj < n; jj++){
       if(matrix[i][jj] != -2 || jj == n - 1){
         if(matrix[i][jj] == -2 && jj == n -1)
-          jj++;
-        COORD END = COORD(i, jj);
-        return END;
+            jj++;
+          COORD END = COORD(i, jj);
+          return END;
+
       }
     }
   }
-  else{
+  else{// if(dir == d_down)
     for(int ii = i+1; ii < m; ii++){
       if(matrix[ii][j] != -2 || ii == m - 1){
         if(matrix[ii][j] == -2 && ii == m - 1)
-          ii++;
-        COORD END = COORD(ii, j);
-        return END;
+                ii++;
+              COORD END = COORD(ii, j);
+              return END;
+        }
       }
-    }
   }
+
+  // no matching end found, return a default value
+  COORD not_found = COORD(-1, -1);
+  return not_found;
   
 }
 
@@ -306,20 +311,20 @@ void print_flattened(int* h_sum_starts_x, int* h_sum_starts_y, int* h_sum_ends_x
   
 }
 
-void flatten_sol_mat(int** sol_mat, int* h_sol_mat, int m, int n){
+void flatten_sol_mat(int** sol_mat, int* d_sol_mat, int m, int n){
   for(int i = 0; i < m; i++){
     for(int j = 0; j < n; j++){
-      h_sol_mat[i*n+j] = sol_mat[i][j];
+      d_sol_mat[i*n+j] = sol_mat[i][j];
     }
   }  
 }
 
-void print_flattened_matrix(int* h_sol_mat, int m, int n){
+void print_flattened_matrix(int* d_sol_mat, int m, int n){
 
   cout << "###Flattened matrix: " << endl;
   for(int i = 0; i < m; i++){
     for(int j = 0; j < n; j++){
-      cout << h_sol_mat[i*n+j] << " ";
+      cout << d_sol_mat[i*n+j] << " ";
     }
     cout << endl;
   }
@@ -335,23 +340,34 @@ void print_flattened_matrix(int* h_sol_mat, int m, int n){
 //CUDA FUNCTIONS //
 ///////////////////
 
-void init_iteration(int* iteration, int* sol_mat, int m, int n)
-{
-  iteration = new int[m*n];
+void init_iteration(int** iteration, int** sol_mat, int m, int n){
 
+  for(int i = 0; i < m; i++){
+    iteration[i] = new int[n];
+  }
   for(int i=0; i<m; i++){
     for(int j=0; j<n; j++){
-      if(sol_mat[i*n+j] == -2){
-        iteration[i*n+j] = 0;
+      if(sol_mat[i][j] == -2){
+        iteration[i][j] = 0;
       }
       else{
-        iteration[i*n+j] = -1;
+        iteration[i][j] = -1;
       }
     }
   }
 }
 
-vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
+void flatten_iteration(int** h_iteration, int* d_iteration, int m, int n){
+  for(int i = 0; i < m; i++){
+    for(int j = 0; j < n; j++){
+      d_iteration[i*n+j] = h_iteration[i][j];
+    }
+  }  
+}
+
+/*
+
+__device__ vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
                                    int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
                                    int* d_sum_ends_y, int* d_sum_hints,
                                    int m, int n, vector<sum> sums){
@@ -361,7 +377,7 @@ vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
   // smaller than minimum hint
   // different than the values in row and column
   // minimum value according to length
-  vector<int> will_remove = {};
+  std::vector<int> will_remove = {};
   for(int kk=d_sum_starts_x[k]; kk<d_sum_ends_x[k]; kk++){
     will_remove.push_back(d_sol_mat[i * n + j]);
   }
@@ -383,7 +399,7 @@ vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
   return possible_values;
 }
 
-void fill_sum(int* d_sol_mat, vector<int> possible_values, int* d_sum_hints, int* d_sum_dirs, int i, int j, int k, int m, int n){
+__device__ void fill_sum(int* d_sol_mat, vector<int> possible_values, int* d_sum_hints, int* d_sum_dirs, int i, int j, int k, int m, int n){
 
   int summation = 0;
   
@@ -414,7 +430,7 @@ void fill_sum(int* d_sol_mat, vector<int> possible_values, int* d_sum_hints, int
   
 }
 
-bool hasRepetitiveValues(const std::vector<int>& vec) {
+__device__ bool hasRepetitiveValues(const std::vector<int>& vec) {
     std::set<int> uniqueElements;
     for (int element : vec) {
         if (uniqueElements.count(element) > 0) {
@@ -426,12 +442,12 @@ bool hasRepetitiveValues(const std::vector<int>& vec) {
     return false;
 }
 
-bool check_solution(int* d_sol_mat, int no_sums, int m, int n,
+__device__ bool check_solution(int* d_sol_mat, int no_sums, int m, int n,
                     int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
                     int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs){
-  /*
+  
   Confirms the solution to see if it is correct or not
-  */
+  
   for(int k=0; k<no_sums; k++){
     int summation = 0;
     vector<int> repetitive_or_not;
@@ -464,11 +480,14 @@ bool check_solution(int* d_sol_mat, int no_sums, int m, int n,
 
 }
 
-__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
-                              int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs, 
-                              int* d_sol_mat, int m, int n, int no_sums, volatile bool* solved,
-                              int* iteration, vector<sum> sums){
 
+__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                              int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths,
+                              int* d_sum_dirs, int* d_sol_mat, 
+                              int m, int n, int no_sums, volatile bool* solved,
+                              int* d_iteration, vector<sum> sums){
+
+  
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
   if(tid < no_sums)
@@ -480,37 +499,38 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
       {
  
         vector<int> possible_values = remove_unusable_values(d_sol_mat, i, j, tid,
-                                                             d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
+                                                             d_sum_starts_x, d_sum_starts_y, 
+                                                             d_sum_ends_x,
                                                              d_sum_ends_y, d_sum_hints,
                                                              m, n, sums);
 
         if(possible_values.size() == 0){
-          iteration[i * n + j] += 1;
+          d_iteration[i * n + j] += 1;
           continue;
         }
 
         if((i == d_sum_ends_x[tid]) && (d_sum_dirs[tid] == 0)){
           int first_value = d_sol_mat[i * n + j];
-          fill_sum(d_sol_mat, possible_values, d_sum_hints, i, j, tid, m, n);
+          fill_sum(d_sol_mat, possible_values, d_sum_hints, d_sum_dirs, i, j, tid, m, n);
           if(d_sol_mat[i * n + j] != first_value){
             continue;
           }
         }
         else if((i == d_sum_ends_y[tid]) && (d_sum_dirs[tid] == 1)){
           int first_value = d_sol_mat[i * n + j];
-          fill_sum(d_sol_mat, possible_values, d_sum_hints, i, j, tid, m, n);
+          fill_sum(d_sol_mat, possible_values, d_sum_hints, d_sum_dirs, i, j, tid, m, n);
           
           if(d_sol_mat[i * n + j] != first_value){
             continue;
           }
         }
 
-        int which_value = iteration[i * n + j] % possible_values.size();
+        int which_value = d_iteration[i * n + j] % possible_values.size();
 
 
         d_sol_mat[i * n + j] = possible_values[which_value];
 
-        iteration[i * n + j] += 1;
+        d_iteration[i * n + j] += 1;
 
         if(check_solution(d_sol_mat, no_sums, m, n,
                           d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
@@ -530,6 +550,368 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
 //CUDA FUNCTIONS //
 ///////////////////
 
+
+__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                              int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths,
+                              int* d_sum_dirs, int* d_sol_mat, 
+                              int m, int n, int no_sums, volatile bool* solved,
+                              int* d_iteration, vector<sum> sums){
+
+  
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(tid < no_sums)
+  {
+    for(int i=d_sum_starts_x[tid]; i<d_sum_ends_x[tid]; i++)
+    {
+
+      for(int j=d_sum_starts_y[tid]; j<d_sum_ends_y[tid]; j++)
+      {
+ 
+        // ==============================================================
+        vector<int> possible_values = {1,2,3,4,5,6,7,8,9};
+
+        // smaller than minimum hint
+        // different than the values in row and column
+        // minimum value according to length
+        std::vector<int> will_remove = {};
+        for(int kk=d_sum_starts_x[tid]; kk<d_sum_ends_x[tid]; kk++){
+          will_remove.push_back(d_sol_mat[i * n + j]);
+        }
+        for(int ll=d_sum_starts_x[tid]; ll<d_sum_ends_x[tid]; ll++){
+          will_remove.push_back(d_sol_mat[i * n + j]);
+        }
+        for(int mm=0; mm<possible_values.size(); mm++)
+        {
+          if((possible_values[mm] >= d_sum_hints[0] || possible_values[mm] >= d_sum_hints[1])){
+            will_remove.push_back(possible_values[mm]);
+          }
+        }
+
+        for (int value : will_remove) {
+            possible_values.erase(remove(possible_values.begin(), possible_values.end(), value), possible_values.end());
+        }
+
+        // =============================================================
+
+        if(possible_values.size() == 0){
+          d_iteration[i * n + j] += 1;
+          continue;
+        }
+
+        if((i == d_sum_ends_x[tid]) && (d_sum_dirs[tid] == 0)){
+          int first_value = d_sol_mat[i * n + j];
+
+          // =============================================================
+          int summation = 0;
+          
+          if(d_sum_dirs[tid] == 0){
+
+            for(int kk=0; kk<j;kk++){
+              if(d_sol_mat[kk * n + j] != -1){ 
+                summation += d_sol_mat[kk * n + j];
+              }
+            }
+          }
+          else{
+
+            for(int kk=0; kk<j;kk++){
+              if(d_sol_mat[i * n + kk] != -1){ 
+                summation += d_sol_mat[i * n + kk];
+              }
+            }
+          }
+
+          int last_value = d_sum_hints[tid] - summation;
+
+          if(find(possible_values.begin(), possible_values.end(), last_value) != possible_values.end()){
+
+            d_sol_mat[i * n + j] = last_value;
+
+          }
+          
+          // =============================================================
+          if(d_sol_mat[i * n + j] != first_value){
+            continue;
+          }
+        }
+        else if((i == d_sum_ends_y[tid]) && (d_sum_dirs[tid] == 1)){
+          int first_value = d_sol_mat[i * n + j];
+          // =============================================================
+          int summation = 0;
+          
+          if(d_sum_dirs[tid] == 0){
+
+            for(int kk=0; kk<j;kk++){
+              if(d_sol_mat[kk * n + j] != -1){ 
+                summation += d_sol_mat[kk * n + j];
+              }
+            }
+          }
+          else{
+
+            for(int kk=0; kk<j;kk++){
+              if(d_sol_mat[i * n + kk] != -1){ 
+                summation += d_sol_mat[i * n + kk];
+              }
+            }
+          }
+
+          int last_value = d_sum_hints[tid] - summation;
+
+          if(find(possible_values.begin(), possible_values.end(), last_value) != possible_values.end()){
+
+            d_sol_mat[i * n + j] = last_value;
+
+          }
+          // =============================================================
+          if(d_sol_mat[i * n + j] != first_value){
+            continue;
+          }
+        }
+
+        int which_value = d_iteration[i * n + j] % possible_values.size();
+
+
+        d_sol_mat[i * n + j] = possible_values[which_value];
+
+        d_iteration[i * n + j] += 1;
+
+        // =============================================================
+        bool condition = true;
+        for(int k=0; k<no_sums; k++){
+          int summation = 0;
+          vector<int> repetitive_or_not;
+          if(d_sum_dirs[k] == 0)
+          {
+            for(int j=d_sum_starts_x[k]; j<d_sum_ends_x[k]; j++)
+            {
+              summation += d_sol_mat[d_sum_starts_y[k] * n + j];
+              repetitive_or_not.push_back(d_sol_mat[d_sum_starts_y[k] * n + j]);
+            }
+          }
+          else{
+            for(int j=d_sum_starts_y[k]; j<d_sum_ends_y[k]; j++)
+            {
+              summation += d_sol_mat[j * n + d_sum_starts_x[k]];
+              repetitive_or_not.push_back(d_sol_mat[d_sum_starts_x[k] * n + j]);
+            }
+          }
+
+          if(d_sum_hints[k] != summation){
+              condition = false;
+          }
+
+          bool has_repetitive = false;
+          set<int> uniqueElements;
+          for (int element : repetitive_or_not) {
+              if (uniqueElements.count(element) > 0) {
+                  // Element already exists in the set
+                  has_repetitive = true;
+              }
+              uniqueElements.insert(element);
+          }
+
+          if (has_repetitive){
+            condition = false;
+          }
+        }
+
+        if(condition){
+            *solved = true;
+        }
+        // =============================================================
+      }
+    }
+  } 
+}
+*/
+__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                              int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths,
+                              int* d_sum_dirs, int* d_sol_mat, 
+                              int m, int n, int no_sums, volatile bool* solved,
+                              int* d_iteration) {
+  
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if (tid < no_sums) {
+    for (int i = d_sum_starts_x[tid]; i < d_sum_ends_x[tid]; i++) {
+
+      for (int j = d_sum_starts_y[tid]; j < d_sum_ends_y[tid]; j++) {
+ 
+        // ==============================================================
+        int possible_values[] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+        int possible_values_size = sizeof(possible_values) / sizeof(int);
+
+        // smaller than minimum hint
+        // different than the values in row and column
+        // minimum value according to length
+        int will_remove[9];
+        int will_remove_count = 0;
+        for (int kk = d_sum_starts_x[tid]; kk < d_sum_ends_x[tid]; kk++) {
+          will_remove[will_remove_count++] = d_sol_mat[i * n + j];
+        }
+        for (int ll = d_sum_starts_x[tid]; ll < d_sum_ends_x[tid]; ll++) {
+          will_remove[will_remove_count++] = d_sol_mat[i * n + j];
+        }
+        for (int mm = 0; mm < possible_values_size; mm++) {
+          if ((possible_values[mm] >= d_sum_hints[0] || possible_values[mm] >= d_sum_hints[1])) {
+            will_remove[will_remove_count++] = possible_values[mm];
+          }
+        }
+
+        for (int k = 0; k < will_remove_count; k++) {
+          int value = will_remove[k];
+          for (int idx = 0; idx < possible_values_size; idx++) {
+            if (possible_values[idx] == value) {
+              for (int m = idx + 1; m < possible_values_size; m++) {
+                possible_values[m - 1] = possible_values[m];
+              }
+              possible_values_size--;
+              break;
+            }
+          }
+        }
+        // =============================================================
+
+        if (possible_values_size == 0) {
+          atomicAdd(&d_iteration[i * n + j], 1);
+          continue;
+        }
+
+        if ((i == d_sum_ends_x[tid]) && (d_sum_dirs[tid] == 0)) {
+          int first_value = d_sol_mat[i * n + j];
+
+          // =============================================================
+          int summation = 0;
+          if (d_sum_dirs[tid] == 0) {
+            for (int kk = 0; kk < j; kk++) {
+              if (d_sol_mat[kk * n + j] != -1) { 
+                summation += d_sol_mat[kk * n + j];
+              }
+            }
+          }
+          else {
+            for (int kk = 0; kk < j; kk++) {
+              if (d_sol_mat[i * n + kk] != -1) { 
+                summation += d_sol_mat[i * n + kk];
+              }
+            }
+          }
+
+          int last_value = d_sum_hints[tid] - summation;
+
+          bool found = false;
+          for (int idx = 0; idx < possible_values_size; idx++) {
+            if (possible_values[idx] == last_value) {
+              found = true;
+              break;
+            }
+          }
+
+          if (found) {
+            d_sol_mat[i * n + j] = last_value;
+          }
+          // =============================================================
+          if (d_sol_mat[i * n + j] != first_value) {
+            continue;
+          }
+        }
+        else if ((i == d_sum_ends_y[tid]) && (d_sum_dirs[tid] == 1)) {
+          int first_value = d_sol_mat[i * n + j];
+          // =============================================================
+          int summation = 0;
+          if (d_sum_dirs[tid] == 0) {
+            for (int kk = 0; kk < j; kk++) {
+              if (d_sol_mat[kk * n + j] != -1) { 
+                summation += d_sol_mat[kk * n + j];
+              }
+            }
+          }
+          else {
+            for (int kk = 0; kk < j; kk++) {
+              if (d_sol_mat[i * n + kk] != -1) { 
+                summation += d_sol_mat[i * n + kk];
+              }
+            }
+          }
+
+          int last_value = d_sum_hints[tid] - summation;
+
+          bool found = false;
+          for (int idx = 0; idx < possible_values_size; idx++) {
+            if (possible_values[idx] == last_value) {
+              found = true;
+              break;
+            }
+          }
+
+          if (found) {
+            d_sol_mat[i * n + j] = last_value;
+          }
+          // =============================================================
+          if (d_sol_mat[i * n + j] != first_value) {
+            continue;
+          }
+        }
+
+        int which_value = d_iteration[i * n + j] % possible_values_size;
+
+        d_sol_mat[i * n + j] = possible_values[which_value];
+
+        atomicAdd(&d_iteration[i * n + j], 1);
+
+        // =============================================================
+        bool condition = true;
+        for (int k = 0; k < no_sums; k++) {
+          int summation = 0;
+          int repetitive_or_not[100];  // Assuming a maximum size of repetitive_or_not
+          int repetitive_or_not_count = 0;
+          if (d_sum_dirs[k] == 0) {
+            for (int j = d_sum_starts_x[k]; j < d_sum_ends_x[k]; j++) {
+              summation += d_sol_mat[d_sum_starts_y[k] * n + j];
+              repetitive_or_not[repetitive_or_not_count++] = d_sol_mat[d_sum_starts_y[k] * n + j];
+            }
+          }
+          else {
+            for (int j = d_sum_starts_y[k]; j < d_sum_ends_y[k]; j++) {
+              summation += d_sol_mat[j * n + d_sum_starts_x[k]];
+              repetitive_or_not[repetitive_or_not_count++] = d_sol_mat[d_sum_starts_x[k] * n + j];
+            }
+          }
+
+          if (d_sum_hints[k] != summation) {
+            condition = false;
+          }
+
+          bool has_repetitive = false;
+          for (int i = 0; i < repetitive_or_not_count; i++) {
+            for (int j = i + 1; j < repetitive_or_not_count; j++) {
+              if (repetitive_or_not[i] == repetitive_or_not[j]) {
+                has_repetitive = true;
+                break;
+              }
+            }
+            if (has_repetitive) {
+              break;
+            }
+          }
+
+          if (has_repetitive) {
+            condition = false;
+          }
+        }
+
+        if (condition) {
+          *solved = true;
+        }
+        // =============================================================
+      }
+    }
+  } 
+}
+
+
 int main(int argc, char** argv){
   
   string filename(argv[1]);
@@ -544,9 +926,9 @@ int main(int argc, char** argv){
   read_matrix(mat, file, m, n);
   print_one_matrix(mat, m, n);
   
-  int** sol_mat;
-  convert_sol(mat, sol_mat, m, n);
-  print_one_matrix(sol_mat, m, n);
+  int** h_sol_mat;
+  convert_sol(mat, h_sol_mat, m, n);
+  print_one_matrix(h_sol_mat, m, n);
   
   vector<sum> sums = get_sums(mat, m, n);
   
@@ -559,12 +941,9 @@ int main(int argc, char** argv){
 
   //To DO 
   // =========================================
-  int BLOCK_SIZE = 16; 
-  int GRID_SIZE = (int)ceil(n/BLOCK_SIZE);;  
+  int block_dim = 1024; 
+  int grid_dim = (int)ceil(n/block_dim);;  
 
-  // Use dim3 objects
-  dim3 grid_dim(GRID_SIZE, GRID_SIZE);
-  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
   // =========================================
 
   int no_sums = sums.size();
@@ -584,15 +963,21 @@ int main(int argc, char** argv){
   // Print flattened vector
   print_flattened(h_sum_starts_x, h_sum_starts_y, h_sum_ends_x, h_sum_ends_y, h_sum_hints, h_sum_lengths, h_sum_dirs, no_sums);
 
-  int* h_sol_mat;
-  h_sol_mat = new int[m*n];
-  flatten_sol_mat(sol_mat, h_sol_mat, m, n);
+  int* d_sol_mat;
+  int* d_iteration = new int[m*n];
+  d_sol_mat = new int[m*n];
+  flatten_sol_mat(h_sol_mat, d_sol_mat, m, n);
 
-  print_flattened_matrix(h_sol_mat, m, n);
+  print_flattened_matrix(d_sol_mat, m, n);
 
   //Declare device pointers and copy data into device
-  int *d_sum_starts_x, *d_sum_starts_y, *d_sum_ends_x, *d_sum_ends_y, *d_sum_hints, *d_sum_lengths, *d_sum_dirs, *d_sol_mat, *d_t_mats;
+  int *d_sum_starts_x, *d_sum_starts_y, *d_sum_ends_x, *d_sum_ends_y, *d_sum_hints, *d_sum_lengths, *d_sum_dirs, *d_t_mats;
 
+  // ITERATION MATRIX
+  int** h_iteration = new int*[m];
+  init_iteration(h_iteration, h_sol_mat, m, n);
+  flatten_iteration(h_iteration, d_iteration, m, n);
+  // ==============================
 
   cudaMalloc(&d_sum_starts_x, no_sums*sizeof(int));
   cudaMalloc(&d_sum_starts_y, no_sums*sizeof(int));
@@ -602,6 +987,7 @@ int main(int argc, char** argv){
   cudaMalloc(&d_sum_lengths, no_sums*sizeof(int));
   cudaMalloc(&d_sum_dirs, no_sums*sizeof(int));
   cudaMalloc(&d_sol_mat, (m*n)*sizeof(int));
+  cudaMalloc(&d_iteration, (m*n)*sizeof(int));
   cudaMalloc(&d_t_mats, (m * n * grid_dim * block_dim)*sizeof(int)); //Allocating invidual matrix for each GPU thread
   //You may use this array if you will implement a thread-wise solution
 
@@ -613,24 +999,23 @@ int main(int argc, char** argv){
   cudaMemcpy(d_sum_lengths, h_sum_lengths, no_sums*sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_sum_dirs, h_sum_dirs, no_sums*sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_sol_mat, h_sol_mat, (m*n)*sizeof(int), cudaMemcpyHostToDevice);
-
+  cudaMemcpy(d_iteration, h_iteration, (m*n)*sizeof(int), cudaMemcpyHostToDevice);
   
-  bool* solved;
+  bool* solved = new bool;
   *solved = false;
-  bool* d_solved;
+  bool* d_solved = new bool;
   
   cudaMalloc(&d_solved, sizeof(bool));
   cudaMemcpy(d_solved, solved, sizeof(bool), cudaMemcpyHostToDevice);
   
 
-  // ITERATION MATRIX
-  int* iteration;
-  init_iteration(iteration, d_sol_mat, m, n);
-  // ==============================
+  
+  
   // CUDA kernel
-  kakuro_kernel<<<grid_dim, block_dim>>>(d_sum_starts_x, d_sum_starts_y, d_sum_ends_x, d_sum_ends_y, d_sum_hints,
-	 				 d_sum_lengths, d_sum_dirs, d_sol_mat, d_t_mats, m, n,
-					 no_sums, d_solved, iteration, sums);
+  kakuro_kernel<<<grid_dim, block_dim>>>(d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
+                                         d_sum_ends_y, d_sum_hints, d_sum_lengths, d_sum_dirs, 
+                                         d_sol_mat, m, n, no_sums, d_solved,
+                                         d_iteration);
   // ===============================
   cudaDeviceSynchronize();
   //CUDA
@@ -642,12 +1027,13 @@ int main(int argc, char** argv){
   
   for(int i = 0; i < n; i++){
     delete mat[i];
-    delete sol_mat[i];
+    delete h_sol_mat[i];
   }
 
   delete mat;
-  delete sol_mat;
-  
+  delete h_sol_mat;
+  delete d_iteration;
+
   delete h_sum_starts_x;
   delete h_sum_starts_y;
   delete h_sum_ends_x;
@@ -655,7 +1041,7 @@ int main(int argc, char** argv){
   delete h_sum_hints;
   delete h_sum_lengths;
   delete h_sum_dirs;
-  delete h_sol_mat;
+  delete d_sol_mat;
 
   cudaFree(d_t_mats);
   cudaFree(d_sum_starts_x);
@@ -666,6 +1052,7 @@ int main(int argc, char** argv){
   cudaFree(d_sum_lengths);
   cudaFree(d_sum_dirs);
   cudaFree(d_sol_mat);
+  cudaFree(d_iteration);
   
   
   return 0;
