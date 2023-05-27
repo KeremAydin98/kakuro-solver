@@ -12,7 +12,7 @@ using namespace std;
 
 enum direction {d_down, d_right, none};
 
-#define COORD std::pair<int, int>
+#define COORD pair<int, int>
 
 //#define DEBUG
 
@@ -69,12 +69,12 @@ void convert_sol(int** mat, int** &sol_mat, int m, int n){
 }
 
 void print_one_matrix(int** matrix, int m, int n){
-  std::cout << "Matrix: " << std::endl;
+  cout << "Matrix: " << endl;
   for(int i = 0; i < m; i++){ //rows
     for(int j = 0; j < n; j++){ //cols
-      std::cout << matrix[i][j] << "\t";
+      cout << matrix[i][j] << "\t";
     }
-    std::cout << "\n";
+    cout << "\n";
   }
 }
 
@@ -126,21 +126,20 @@ COORD find_end(int** matrix, int m, int n, int i, int j, direction dir){ //0 dow
   if(dir == d_right){
     for(int jj = j+1; jj < n; jj++){
       if(matrix[i][jj] != -2 || jj == n - 1){
-	if(matrix[i][jj] == -2 && jj == n -1)
-	  jj++;
-	COORD END = COORD(i, jj);
-	return END;
+        if(matrix[i][jj] == -2 && jj == n -1)
+          jj++;
+        COORD END = COORD(i, jj);
+        return END;
       }
     }
   }
-
-  if(dir == d_down){
+  else{
     for(int ii = i+1; ii < m; ii++){
       if(matrix[ii][j] != -2 || ii == m - 1){
-	if(matrix[ii][j] == -2 && ii == m - 1)
-	  ii++;
-	COORD END = COORD(ii, j);
-	return END;
+        if(matrix[ii][j] == -2 && ii == m - 1)
+          ii++;
+        COORD END = COORD(ii, j);
+        return END;
       }
     }
   }
@@ -198,7 +197,7 @@ vector<sum> get_sums(int** matrix, int m, int n){
 }
   
 
-void read_matrix(int** &matrix, std::ifstream &afile, int m, int n){
+void read_matrix(int** &matrix, ifstream &afile, int m, int n){
 
   matrix = new int*[m]; //rows
 
@@ -336,19 +335,176 @@ void print_flattened_matrix(int* h_sol_mat, int m, int n){
 //CUDA FUNCTIONS //
 ///////////////////
 
-__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x, int* d_sum_ends_y,
-			      int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs, int* d_sol_mat, int* d_perms, i
-			      nt* d_t_mats, int m, int n, int no_sums, volatile bool* solved){
+void init_iteration(int* iteration, int* sol_mat, int m, int n)
+{
+  iteration = new int[m*n];
 
-  
+  for(int i=0; i<m; i++){
+    for(int j=0; j<n; j++){
+      if(sol_mat[i*n+j] == -2){
+        iteration[i*n+j] = 0;
+      }
+      else{
+        iteration[i*n+j] = -1;
+      }
+    }
+  }
+}
+
+vector<int> remove_unusable_values(int* d_sol_mat, int i, int j, int k,
+                                   int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                                   int* d_sum_ends_y, int* d_sum_hints,
+                                   int* d_t_mats, int m, int n, vector<sum> sums){
+
+  vector<int> possible_values = {1,2,3,4,5,6,7,8,9};
+
+  // smaller than minimum hint
+  // different than the values in row and column
+  // minimum value according to length
+  vector<int> will_remove = {};
+  for(int kk=d_sum_starts_x[k]; kk<d_sum_ends_x[k]; kk++){
+    will_remove.push_back(d_sol_mat[i * n + j]);
+  }
+  for(int ll=d_sum_starts_x[k]; ll<d_sum_ends_x[k]; ll++){
+    will_remove.push_back(d_sol_mat[i * n + j]);
+  }
+  for(int mm=0; mm<possible_values.size(); mm++)
+  {
+    if((possible_values[mm] >= d_sum_hints[0] || possible_values[mm] >= d_sum_hints[1])){
+      will_remove.push_back(possible_values[mm]);
+    }
+  }
+
+  vector<int>::iterator it;
+  for (it = will_remove.begin(); it != will_remove.end(); it++) {
+      possible_values.erase(remove(possible_values.begin(), possible_values.end(), *it), possible_values.end());
+  }
+
+  return possible_values;
+}
+
+bool check_solution(int** sol_mat, vector<sum> sums, int m, int n){
+  /*
+  Confirms the solution to see if it is correct or not
+  */
+
+  for(int i=0; i<sums.size(); i++){
+    
+    if(sums[i].dir == 0){ // down direction
+      int start = sums[i].start.first;
+      int end = sums[i].end.first;
+      int column = sums[i].start.second;
+      vector<int> repetitive_or_not;
+      
+      int sum = 0;
+      for(int j=start; j<end; j++){
+        // Check if there are no repetitive values
+        repetitive_or_not.push_back(sol_mat[j][column]);
+        if(sol_mat[j][column] == -2){
+          return false;
+        }
+        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[j][column]) > 1) {
+            return false;
+        }
+        sum += sol_mat[j][column];
+      }
+
+      // Check if the sums are correct
+      if(sum != sums[i].hint){
+        return false;
+      }
+    }
+    else{ // right direction
+      int start = sums[i].start.second;
+      int end = sums[i].end.second;
+      int row = sums[i].start.first;
+      vector<int> repetitive_or_not;
+
+      // Check if there are no repetitive values
+      int sum = 0;
+      for(int j=start; j<end; j++){
+        // Check if there are no repetitive values
+        repetitive_or_not.push_back(sol_mat[row][j]);
+        if(sol_mat[row][j] == -2){
+          return false;
+        }
+        if (count(repetitive_or_not.begin(), repetitive_or_not.end(), sol_mat[row][j]) > 1) {
+            return false;
+        }
+        sum += sol_mat[row][j];   
+      }
+
+      // Check if the sums are correct
+      if(sum != sums[i].hint){
+        return false;
+      }
+
+      }
+    }
+
+    return true;
+
+  }
+
+
+__global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_sum_ends_x,
+                              int* d_sum_ends_y, int* d_sum_hints, int* d_sum_lengths, int* d_sum_dirs, 
+                              int* d_sol_mat, int* d_t_mats, int m, int n, int no_sums, volatile bool* solved,
+                              int* iteration, vector<sum> sums){
+
   //TO DO
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(tid < no_sums)
+  {
+    for(int i=d_sum_starts_x[tid]; i<d_sum_ends_x[tid]; i++)
+    {
+
+      for(int j=d_sum_starts_y[tid]; j<d_sum_ends_y[tid]; j++)
+      {
+
+        vector<int> possible_values = remove_unusable_values(d_sol_mat, i, j, tid,
+                                                             d_sum_starts_x, d_sum_starts_y, d_sum_ends_x,
+                                                             d_sum_ends_y, d_sum_hints,
+                                                             d_t_mats, m, n, sums);
+
+        if(possible_values.size() == 0){
+          iteration[i * n + j] += 1;
+          continue;
+        }
+
+        if((i == d_sum_ends_x[tid]) && (d_sum_dirs[tid] == 0)){
+          int first_value = d_sol_mat[i * n + j];
+          fill_sum(d_sol_mat, possible_values, sums, tid, i, j);
+          if(d_sol_mat[i * n + j] != first_value){
+            continue;
+          }
+        }
+        else if((i == d_sum_ends_y[tid]) && (d_sum_dirs[tid] == 1)){
+          int first_value = d_sol_mat[i * n + j];
+          fill_sum(d_sol_mat, possible_values, sums, tid, j, i);
+          
+          if(d_sol_mat[i * n + j] != first_value){
+            continue;
+          }
+        }
+
+        int which_value = iteration[i * n + j] % possible_values.size();
 
 
+        d_sol_mat[i * n + j] = possible_values[which_value];
+
+        iteration[i * n + j] += 1;
+     
+
+      }
+    }
+  } 
+}
   //About volatile bool* solved:
   //You can get idea from https://stackoverflow.com/questions/12505750/how-can-a-global-function-return-a-value-or-break-out-like-c-c-does%5B/url%5D for how to break out of a CUDA kernel
   //You may or may not use it
-  
-}
+
 
 ///////////////////
 //CUDA FUNCTIONS //
@@ -356,8 +512,8 @@ __global__ void kakuro_kernel(int* d_sum_starts_x, int* d_sum_starts_y, int* d_s
 
 int main(int argc, char** argv){
   
-  std::string filename(argv[1]);
-  std::ifstream file;
+  string filename(argv[1]);
+  ifstream file;
   file.open(filename.c_str());
 
   int m, n;
@@ -370,22 +526,28 @@ int main(int argc, char** argv){
   
   int** sol_mat;
   convert_sol(mat, sol_mat, m, n);
-  //print_one_matrix(sol_mat, m, n);
+  print_one_matrix(sol_mat, m, n);
   
   vector<sum> sums = get_sums(mat, m, n);
   
   //CUDA
-  cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, 0);
+  cudaDeviceProp prop; // cudaDeviceProp prop; declares a variable prop of type cudaDeviceProp, which is a structure that holds information about a CUDA device.
+  cudaGetDeviceProperties(&prop, 0); // retrieves the properties of the CUDA device with the device ID 0 and stores the information in the prop variable
   printf("==prop== Running on device: %d -- %s \n", 0, prop.name);
   printf("==prop== #of SM -- %d \n", prop.multiProcessorCount);
   printf("==prop== Max Threads Per Block: -- %d \n", prop.maxThreadsPerBlock);
 
-  int grid_dim = //TO DO
-  int block_dim = //To DO
+  //To DO 
+  // =========================================
+  int BLOCK_SIZE = 16; 
+  int GRID_SIZE = (int)ceil(n/BLOCK_SIZE);;  
+
+  // Use dim3 objects
+  dim3 grid_dim(GRID_SIZE, GRID_SIZE);
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  // =========================================
 
   int no_sums = sums.size();
-
 
   //Flattening sums and matrix
   int* h_sum_starts_x = new int[no_sums];
@@ -396,8 +558,10 @@ int main(int argc, char** argv){
   int* h_sum_lengths = new int[no_sums];
   int* h_sum_dirs = new int[no_sums];
 
+  // Pair to integers
   flatten_sums(sums, h_sum_starts_x, h_sum_starts_y, h_sum_ends_x, h_sum_ends_y, h_sum_hints, h_sum_lengths, h_sum_dirs, no_sums);
 
+  // Print flattened vector
   print_flattened(h_sum_starts_x, h_sum_starts_y, h_sum_ends_x, h_sum_ends_y, h_sum_hints, h_sum_lengths, h_sum_dirs, no_sums);
 
   int* h_sol_mat;
@@ -408,7 +572,8 @@ int main(int argc, char** argv){
 
   //Declare device pointers and copy data into device
   int *d_sum_starts_x, *d_sum_starts_y, *d_sum_ends_x, *d_sum_ends_y, *d_sum_hints, *d_sum_lengths, *d_sum_dirs, *d_sol_mat, *d_t_mats;
-  
+
+
   cudaMalloc(&d_sum_starts_x, no_sums*sizeof(int));
   cudaMalloc(&d_sum_starts_y, no_sums*sizeof(int));
   cudaMalloc(&d_sum_ends_x, no_sums*sizeof(int));
@@ -417,7 +582,7 @@ int main(int argc, char** argv){
   cudaMalloc(&d_sum_lengths, no_sums*sizeof(int));
   cudaMalloc(&d_sum_dirs, no_sums*sizeof(int));
   cudaMalloc(&d_sol_mat, (m*n)*sizeof(int));
-  cudaMalloc(&d_t_mats, (m*n*grid_dim*block_dim)*sizeof(int)); //Allocating invidual matrix for each GPU thread
+  cudaMalloc(&d_t_mats, (m * n * grid_dim * block_dim)*sizeof(int)); //Allocating invidual matrix for each GPU thread
   //You may use this array if you will implement a thread-wise solution
 
   cudaMemcpy(d_sum_starts_x, h_sum_starts_x, no_sums*sizeof(int), cudaMemcpyHostToDevice);
@@ -436,11 +601,17 @@ int main(int argc, char** argv){
   
   cudaMalloc(&d_solved, sizeof(bool));
   cudaMemcpy(d_solved, solved, sizeof(bool), cudaMemcpyHostToDevice);
-
   
+
+  // ITERATION MATRIX
+  int* iteration;
+  init_iteration(iteration, d_sol_mat, m, n);
+  // ==============================
+  // CUDA kernel
   kakuro_kernel<<<grid_dim, block_dim>>>(d_sum_starts_x, d_sum_starts_y, d_sum_ends_x, d_sum_ends_y, d_sum_hints,
-					 d_sum_lengths, d_sum_dirs, d_sol_mat, d_perms, d_t_mats, m, n,
-					 no_sums, d_solved);
+	 				 d_sum_lengths, d_sum_dirs, d_sol_mat, d_t_mats, m, n,
+					 no_sums, d_solved, iteration, sums);
+  // ===============================
   cudaDeviceSynchronize();
   //CUDA
   
@@ -471,10 +642,10 @@ int main(int argc, char** argv){
   cudaFree(d_sum_starts_y);
   cudaFree(d_sum_ends_x);
   cudaFree(d_sum_ends_y);
-  cudaFree(d_sum_hints;
-  cudaFree(d_sum_lengths;
-  cudaFree(d_sum_dirs;
-  cudaFree(d_sol_mat;
+  cudaFree(d_sum_hints);
+  cudaFree(d_sum_lengths);
+  cudaFree(d_sum_dirs);
+  cudaFree(d_sol_mat);
   
   
   return 0;
